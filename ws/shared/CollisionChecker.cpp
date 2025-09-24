@@ -29,12 +29,12 @@ bool CollisionChecker::PointCollisionChecker(const Eigen::Vector2d& point, const
 
 bool CollisionChecker::LineCollisionChecker(const Eigen::Vector2d& start,
                                             const Eigen::Vector2d& end,
-                                            const amp::Problem2D& problem) {
+                                            const amp::Environment2D& env) {
     auto cross = [](const Eigen::Vector2d& a, const Eigen::Vector2d& b) {
         return a.x() * b.y() - a.y() * b.x();
     };
 
-    for (const auto& obstacle : problem.obstacles) {
+    for (const auto& obstacle : env.obstacles) {
         const auto& vertices = obstacle.verticesCCW();
         for (size_t i = 0; i < vertices.size(); ++i) {
             const Eigen::Vector2d& v1 = vertices[i];
@@ -76,4 +76,38 @@ bool CollisionChecker::LineCollisionChecker(const Eigen::Vector2d& start,
         }
     }
     return false; // no collisions
+}
+
+float CollisionChecker::PointToNearestVertexDistance(const Eigen::Vector2d& point, const amp::Problem2D& problem) {
+    float min_distance = std::numeric_limits<float>::max();
+    for (const auto& obstacle : problem.obstacles) {
+        const auto& vertices = obstacle.verticesCCW();
+        for (size_t i = 0; i < vertices.size(); ++i) {
+            float distance = (point - vertices[i]).norm();
+            if (distance < min_distance) {
+                min_distance = distance;
+            }
+        }
+    }
+    return min_distance;
+}
+
+float CollisionChecker::PointToLineAndPoint(const Eigen::Vector2d& point,
+                                            const Eigen::Vector2d& line_direction,
+                                            const Eigen::Vector2d& line_point) {
+    //Point Line Distance
+    float numerator = std::abs((point - line_point).x() * line_direction.y() - (point - line_point).y() * line_direction.x());
+    float denominator = line_direction.norm();
+    return numerator / denominator;
+}
+
+bool CollisionChecker::isManipStateFeasible(const amp::LinkManipulator2D& manip, const amp::ManipulatorState& state, const amp::Environment2D& env) {
+    for (uint32_t i = 0; i < manip.nLinks(); ++i) {
+        Eigen::Vector2d joint_start = manip.getJointLocation(state, i);
+        Eigen::Vector2d joint_end = manip.getJointLocation(state, i + 1);
+        if (LineCollisionChecker(joint_start, joint_end, env)) {
+            return false; // In collision
+        }
+    }
+    return true; // No collisions
 }
