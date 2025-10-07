@@ -23,13 +23,21 @@ class MyGDAlgorithm : public amp::GDAlgorithm {
 };
 
 class MyPotentialFunction : public amp::PotentialFunction2D {
-    public:
-		// Returns the potential function value (height) for a given 2D point. 
-        virtual double operator()(const Eigen::Vector2d& q) const override {
-            return q[0] * q[0] + q[1] * q[1];
-        }
+	private:
+		const amp::Problem2D problem;
+		
+		double d_star, zetta, Q_star, eta;
 
-		virtual Eigen::Vector2d getGradient(const Eigen::Vector2d& q) const override {
-            return Eigen::Vector2d(q[0] * q[0],  q[1] * q[1]);
-        }
+    public:
+		MyPotentialFunction(const amp::Problem2D& prob,const double d_star,const double zetta,const double Q_star,const double eta) : problem(prob), d_star(d_star), zetta(zetta), Q_star(Q_star), eta(eta) {}
+		
+		virtual double operator()(const Eigen::Vector2d& q) const override;
+		
+		virtual Eigen::Vector2d getGradient(const Eigen::Vector2d& q) const override;
+
+		// Get nearest distance and vector to obstacle
+		std::vector<std::pair<double, Eigen::Vector2d>> getNearestObstacleInfo(const Eigen::Vector2d& q) const;
+
+		// Get nearest vertex of all obstacles
+		Eigen::Vector2d getNearestVertex(const Eigen::Vector2d& q) const;
 };

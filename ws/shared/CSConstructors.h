@@ -9,8 +9,6 @@
 
 ////////////////////// THIS IS FROM HW4 //////////////////////
 
-/* You can just move these classes to shared folder and include them instead of copying them to hw6 project*/
-
 // Derive the amp::GridCSpace2D class and override the missing method
 class MyGridCSpace2D : public amp::GridCSpace2D {
     public:

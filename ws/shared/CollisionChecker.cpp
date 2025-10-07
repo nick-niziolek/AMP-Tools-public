@@ -111,3 +111,70 @@ bool CollisionChecker::isManipStateFeasible(const amp::LinkManipulator2D& manip,
     }
     return true; // No collisions
 }
+
+bool CollisionChecker::isCellColliding(const Eigen::Vector2d& cell_center, double cell_size_x, double cell_size_y, const amp::Environment2D& env) {
+    // Calculate the half size of the cell in each dimension
+    double half_size_x = cell_size_x / 2.0;
+    double half_size_y = cell_size_y / 2.0;
+
+    // Define the four corners of the cell
+    Eigen::Vector2d bottom_left(cell_center.x() - half_size_x, cell_center.y() - half_size_y);
+    Eigen::Vector2d bottom_right(cell_center.x() + half_size_x, cell_center.y() - half_size_y);
+    Eigen::Vector2d top_right(cell_center.x() + half_size_x, cell_center.y() + half_size_y);
+    Eigen::Vector2d top_left(cell_center.x() - half_size_x, cell_center.y() + half_size_y);
+
+    // Get vector of cell corners
+    std::vector<Eigen::Vector2d> cell_corners = {bottom_left, bottom_right, top_right, top_left};
+
+    // Loop over obstacles in the environment
+    for (const auto& obstacle : env.obstacles) {
+        const auto& vertices = obstacle.verticesCCW();
+        if (convexPolygonsIntersect(cell_corners, vertices)) {
+            return true; // Cell collides with obstacle
+        }
+    }
+
+    return false; // Cell is free of collisions
+}
+
+// Helper: project polygon onto axis and get [min, max]
+std::pair<double, double> CollisionChecker::projectPolygon(const std::vector<Eigen::Vector2d>& poly, const Eigen::Vector2d& axis) {
+    double min_proj = std::numeric_limits<double>::infinity();
+    double max_proj = -std::numeric_limits<double>::infinity();
+    for (const auto& v : poly) {
+        double proj = v.dot(axis);
+        if (proj < min_proj) min_proj = proj;
+        if (proj > max_proj) max_proj = proj;
+    }
+    return {min_proj, max_proj};
+}
+
+// Helper: check if projections overlap
+bool CollisionChecker::overlapOnAxis(const std::vector<Eigen::Vector2d>& polyA, const std::vector<Eigen::Vector2d>& polyB, const Eigen::Vector2d& axis) {
+    auto [minA, maxA] = projectPolygon(polyA, axis);
+    auto [minB, maxB] = projectPolygon(polyB, axis);
+    return !(maxA < minB || maxB < minA);
+}
+
+// Main intersection test
+bool CollisionChecker::convexPolygonsIntersect(const std::vector<Eigen::Vector2d>& polyA, const std::vector<Eigen::Vector2d>& polyB) {
+    // Collect all potential separating axes (edge normals)
+    auto checkAxes = [&](const std::vector<Eigen::Vector2d>& poly1, const std::vector<Eigen::Vector2d>& poly2) {
+        size_t n = poly1.size();
+        for (size_t i = 0; i < n; ++i) {
+            Eigen::Vector2d edge = poly1[(i + 1) % n] - poly1[i];
+            Eigen::Vector2d normal(-edge.y(), edge.x());  // perpendicular vector
+
+            // Normalize to avoid numerical issues
+            normal.normalize();
+
+            // If projections don't overlap on this axis → no intersection
+            if (!overlapOnAxis(poly1, poly2, normal))
+                return false;
+        }
+        return true;
+    };
+
+    // Test all edges from both polygons
+    return checkAxes(polyA, polyB) && checkAxes(polyB, polyA);
+}

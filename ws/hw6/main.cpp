@@ -4,7 +4,7 @@
 #include "hw/HW6.h"
 
 #include "MyAStar.h"
-#include "MyCSConstructors.h"
+#include "CSConstructors.h"
 #include "ManipulatorSkeleton.h"
 
 using namespace amp;
@@ -14,12 +14,12 @@ int main(int argc, char** argv) {
     amp::RNG::seed(amp::RNG::randiUnbounded());
 
     // You will need your 2-link manipulator from HW4
-    MyManipulator2D manipulator;
+    Manipulator2D manipulator;
     Problem2D point_problem = HW2::getWorkspace1();
     Problem2D manip_problem = HW6::getHW4Problem2();
     
     // Construct point-agent and manipulator cspace instances.
-    std::size_t n_cells = 5;
+    std::size_t n_cells = 50;
     std::shared_ptr<MyPointAgentCSConstructor> point_agent_ctor = std::make_shared<MyPointAgentCSConstructor>(n_cells);
     std::shared_ptr<MyManipulatorCSConstructor> manipulator_ctor = std::make_shared<MyManipulatorCSConstructor>(n_cells);
     std::shared_ptr<WaveFrontAlgorithm> wf_algo = std::make_shared<MyWaveFrontAlgorithm>();
@@ -37,14 +37,14 @@ int main(int argc, char** argv) {
     Visualizer::makeFigure(manip_problem, manipulator, trajectory);
     Visualizer::makeFigure(*manip_algo.getCSpace(), trajectory);
 
-    // For Exercise 3, you will need to implement the A* algorithm.
-    ShortestPathProblem problem = HW6::getEx3SPP();
-    LookupSearchHeuristic heuristic = HW6::getEx3Heuristic();
-    MyAStarAlgo algo;
-    MyAStarAlgo::GraphSearchResult result = algo.search(problem, heuristic);
+    // // For Exercise 3, you will need to implement the A* algorithm.
+    // ShortestPathProblem problem = HW6::getEx3SPP();
+    // LookupSearchHeuristic heuristic = HW6::getEx3Heuristic();
+    // MyAStarAlgo algo;
+    // MyAStarAlgo::GraphSearchResult result = algo.search(problem, heuristic);
 
     Visualizer::saveFigures(true, "hw6_figs");
 
-    amp::HW6::grade<PointWaveFrontAlgorithm, ManipulatorWaveFrontAlgorithm, MyAStarAlgo>("yusif.razzaq@colorado.edu", argc, argv, std::make_tuple(wf_algo, point_agent_ctor), std::make_tuple(wf_algo, manipulator_ctor), std::make_tuple());
+    // amp::HW6::grade<PointWaveFrontAlgorithm, ManipulatorWaveFrontAlgorithm, MyAStarAlgo>("yusif.razzaq@colorado.edu", argc, argv, std::make_tuple(wf_algo, point_agent_ctor), std::make_tuple(wf_algo, manipulator_ctor), std::make_tuple());
     return 0;
 }
