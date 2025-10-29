@@ -56,3 +56,5 @@ class MyWaveFrontAlgorithm : public amp::WaveFrontAlgorithm {
 
 };
 
+///////////////////////////////////////////////////////////////
+

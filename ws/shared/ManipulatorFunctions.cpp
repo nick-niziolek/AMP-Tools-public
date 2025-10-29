@@ -1,4 +1,4 @@
-#include "ManipulatorSkeleton.h"
+#include "ManipulatorFunctions.h"
 #include "CollisionChecker.h"
 #include <Eigen/Cholesky>
 
@@ -97,8 +97,22 @@ amp::ManipulatorState Manipulator2D::getConfigurationFromIK(const Eigen::Vector2
         theta2 -= theta1;
 
         // Assign to joint angles
-        joint_angles(0) = fmod(theta1 + 2 * M_PI, 2 * M_PI);
-        joint_angles(1) = fmod(theta2 + 2 * M_PI, 2 * M_PI);
+        auto normalize_angle = [](double angle) {
+            if (angle > 2*M_PI) {
+                while (angle > 2 * M_PI) angle -= 2 * M_PI;
+            } else if (angle < 0) {
+                while (angle < 0) angle += 2 * M_PI;
+            }
+            return angle;
+        };
+
+        joint_angles(0) = theta1;
+        joint_angles(1) = theta2;
+
+        //joint_angles(0) = normalize_angle(theta1);
+        //joint_angles(1) = normalize_angle(theta2);
+
+        std::cout << "IK Solution found: [" << joint_angles(0) << ", " << joint_angles(1) << "]" << " For end effector position: [" << end_effector_location.x() << ", " << end_effector_location.y() << "]" << std::endl;
 
         return joint_angles;
     } else {

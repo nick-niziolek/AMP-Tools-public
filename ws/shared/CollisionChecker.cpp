@@ -1,23 +1,32 @@
 #include "CollisionChecker.h"
 
-bool CollisionChecker::PointCollisionChecker(const Eigen::Vector2d& point, const amp::Problem2D& problem) {
-    // Loop over each obstacle in the problem
-    for (const auto& obstacle : problem.obstacles) {
-        // Check if the point is inside the obstacle by using ray casting and horizontal line
+bool CollisionChecker::PointCollisionChecker(const Eigen::Vector2d& point, const amp::Environment2D& env) {
+    // Loop over each obstacle in the environment
+    for (const auto& obstacle : env.obstacles) {
         const auto& vertices = obstacle.verticesCCW();
         int intersection_count = 0;
+        
         for (size_t i = 0; i < vertices.size(); ++i) {
             const auto& v1 = vertices[i];
             const auto& v2 = vertices[(i + 1) % vertices.size()]; // wraps around to first vertex
+            
             // Check if the horizontal ray from 'point' intersects the edge (v1, v2)
-            std::cout << "v1.y(): " << v1.y() << ", v2.y(): " << v2.y() << ", point.y(): " << point.y() << std::endl;
+            // The ray extends to the right (positive x direction) from point
+            
+            // First check: does the edge cross the horizontal line at point.y()?
             if ((v1.y() > point.y()) != (v2.y() > point.y())) {
-                intersection_count++;
+                // Calculate the x-coordinate of the intersection
+                // Using linear interpolation: x = v1.x + (point.y - v1.y) * (v2.x - v1.x) / (v2.y - v1.y)
+                double x_intersect = v1.x() + (point.y() - v1.y()) * (v2.x() - v1.x()) / (v2.y() - v1.y());
+                
+                // Only count if intersection is to the RIGHT of the point
+                if (x_intersect > point.x()) {
+                    intersection_count++;
+                }
             }
         }
 
         // If the intersection count is odd, the point is inside the obstacle
-        std::cout << "Intersection count for obstacle: " << intersection_count << std::endl;
         if (intersection_count % 2 == 1) {
             return true;
         }
@@ -78,9 +87,9 @@ bool CollisionChecker::LineCollisionChecker(const Eigen::Vector2d& start,
     return false; // no collisions
 }
 
-float CollisionChecker::PointToNearestVertexDistance(const Eigen::Vector2d& point, const amp::Problem2D& problem) {
+float CollisionChecker::PointToNearestVertexDistance(const Eigen::Vector2d& point, const amp::Environment2D& env) {
     float min_distance = std::numeric_limits<float>::max();
-    for (const auto& obstacle : problem.obstacles) {
+    for (const auto& obstacle : env.obstacles) {
         const auto& vertices = obstacle.verticesCCW();
         for (size_t i = 0; i < vertices.size(); ++i) {
             float distance = (point - vertices[i]).norm();
@@ -177,4 +186,187 @@ bool CollisionChecker::convexPolygonsIntersect(const std::vector<Eigen::Vector2d
 
     // Test all edges from both polygons
     return checkAxes(polyA, polyB) && checkAxes(polyB, polyA);
+}
+
+bool CollisionChecker::pointInPolygon(const Eigen::Vector2d& point, const std::vector<Eigen::Vector2d>& vertices) {
+    int n = vertices.size();
+    bool inside = false;
+    
+    double x = point.x();
+    double y = point.y();
+    
+    double p1x = vertices[0].x();
+    double p1y = vertices[0].y();
+    
+    for (int i = 1; i <= n; i++) {
+        double p2x = vertices[i % n].x();
+        double p2y = vertices[i % n].y();
+        
+        if (y > std::min(p1y, p2y)) {
+            if (y <= std::max(p1y, p2y)) {
+                if (x <= std::max(p1x, p2x)) {
+                    if (p1y != p2y) {
+                        double xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x;
+                        if (p1x == p2x || x <= xinters) {
+                            inside = !inside;
+                        }
+                    }
+                }
+            }
+        }
+        p1x = p2x;
+        p1y = p2y;
+    }
+    
+    return inside;
+}
+
+Eigen::Vector2d CollisionChecker::closestPointOnSegment(const Eigen::Vector2d& point, 
+                                      const Eigen::Vector2d& segStart, 
+                                      const Eigen::Vector2d& segEnd) {
+    Eigen::Vector2d ab = segEnd - segStart;
+    
+    // If segment has zero length
+    double lengthSquared = ab.squaredNorm();
+    if (lengthSquared < 1e-10) {
+        return segStart;
+    }
+    
+    // Parameter t for closest point (clamped to [0, 1])
+    double t = (point - segStart).dot(ab) / lengthSquared;
+    t = std::max(0.0, std::min(1.0, t));
+    
+    // Closest point on segment
+    return segStart + t * ab;
+}
+
+bool CollisionChecker::circlePolygonCollision(const Eigen::Vector2d& point, 
+                           double radius, 
+                           const std::vector<Eigen::Vector2d>& vertices) {
+    // First check if center is inside polygon
+    if (pointInPolygon(point, vertices)) {
+        return true;
+    }
+    
+    // Find minimum distance to any edge
+    double minDistanceSquared = std::numeric_limits<double>::infinity();
+    
+    for (size_t i = 0; i < vertices.size(); i++) {
+        const Eigen::Vector2d& segStart = vertices[i];
+        const Eigen::Vector2d& segEnd = vertices[(i + 1) % vertices.size()];
+        
+        Eigen::Vector2d closest = closestPointOnSegment(point, segStart, segEnd);
+        double distSquared = (point - closest).squaredNorm();
+        
+        minDistanceSquared = std::min(minDistanceSquared, distSquared);
+    }
+    
+    // Collision if closest distance is less than radius
+    return minDistanceSquared < (radius * radius);
+}
+
+/////////////////////////////////////////////////////////////////
+
+bool CollisionChecker::GenericCollisionChecker(const std::vector<Eigen::Vector2d>& agent, const amp::Environment2D& env) {
+    if (agent.size() == 1) {
+        // Point agent
+        return PointCollisionChecker(agent[0], env);
+    } else if (agent.size() == 2) {
+        // Error, not a real polygon
+        throw std::invalid_argument("Agent with 2 vertices is not a valid polygon.");
+    } else {
+        // Polygon agent
+        for (const auto& obstacle : env.obstacles) {
+            const auto& vertices = obstacle.verticesCCW();
+            if (convexPolygonsIntersect(agent, vertices)) {
+                return true; // Collision detected
+            }
+        }
+        return false; // No collisions
+    }
+}
+
+///////////////////////////////////////////////////////////////
+
+bool MultiDiscConfigSpace::inCollision(const Eigen::VectorXd& cspace_state) const {
+    // Check if the cspace_state is twice the size, and use line collision if true
+    if (cspace_state.size() == 4 * m_problem.numAgents()) {
+        if (inLineCollision(cspace_state.head(cspace_state.size() / 2), cspace_state.tail(cspace_state.size() / 2))) {
+            return true;
+        }
+        for (size_t i = 0; i < 2; i++) {
+            Eigen::VectorXd state = cspace_state.segment(i * (cspace_state.size() / 2), cspace_state.size() / 2);
+            if (inPointCollision(state)) {
+                return true;
+            }
+        }
+    }
+    else {
+        if (inPointCollision(cspace_state)) {
+            return true;
+        }
+    }
+    return false; // No collisions
+}
+
+bool MultiDiscConfigSpace::inPointCollision(const Eigen::VectorXd& cspace_state) const {
+    // Each agent has 2 dimensions (x, y)
+    std::size_t n_agents = m_problem.numAgents();
+
+    // Reuse a single checker instance for efficiency
+    CollisionChecker checker;
+
+    for (std::size_t i = 0; i < n_agents; ++i) {
+        Eigen::Vector2d agent_pos(cspace_state(2 * i), cspace_state(2 * i + 1));
+        double agent_radius = m_problem.agent_properties[i].radius;
+
+        // Check collision with obstacles
+        for (const auto& obstacle : m_problem.obstacles) {
+            if (checker.circlePolygonCollision(agent_pos, agent_radius, obstacle.verticesCCW())) {
+                return true; // Collision detected
+            }
+        }
+
+        // Check collision with other agents
+        for (std::size_t j = i + 1; j < n_agents; ++j) {
+            Eigen::Vector2d other_agent_pos(cspace_state(2 * j), cspace_state(2 * j + 1));
+            double other_agent_radius = m_problem.agent_properties[j].radius;
+
+            double dist = (agent_pos - other_agent_pos).norm();
+            if (dist < (agent_radius + other_agent_radius)) {
+                return true; // Collision between agents
+            }
+        }
+    }
+    return false; // No collisions
+}
+
+bool MultiDiscConfigSpace::inLineCollision(const Eigen::VectorXd& cspace_start, const Eigen::VectorXd& cspace_end) const {
+    std::size_t n_agents = m_problem.numAgents();
+    CollisionChecker checker;
+
+    for (std::size_t i = 0; i < n_agents; ++i) {
+        Eigen::Vector2d start_pos(cspace_start(2 * i), cspace_start(2 * i + 1));
+        Eigen::Vector2d end_pos(cspace_end(2 * i), cspace_end(2 * i + 1));
+        double agent_radius = m_problem.agent_properties[i].radius;
+
+        // Get lines offset radius from agent path
+        Eigen::Vector2d path_dir = end_pos - start_pos;
+        Eigen::Vector2d normal(-path_dir.y(), path_dir.x());
+        normal.normalize();
+        Eigen::Vector2d offset = normal * agent_radius;
+        Eigen::Vector2d line1_start = start_pos + offset;
+        Eigen::Vector2d line1_end = end_pos + offset;
+        // Check collision with obstacles for line1
+        if (checker.LineCollisionChecker(line1_start, line1_end, m_problem)) {
+            return true; // Collision detected
+        }
+        Eigen::Vector2d line2_start = start_pos - offset;
+        Eigen::Vector2d line2_end = end_pos - offset;
+        // Check collision with obstacles for line2
+        if (checker.LineCollisionChecker(line2_start, line2_end, m_problem)) {
+            return true; // Collision detected
+        }
+    }
+    return false; // No collisions
 }
