@@ -267,21 +267,45 @@ bool CollisionChecker::circlePolygonCollision(const Eigen::Vector2d& point,
 
 /////////////////////////////////////////////////////////////////
 
-bool CollisionChecker::GenericCollisionChecker(const std::vector<Eigen::Vector2d>& agent, const amp::Environment2D& env) {
-    if (agent.size() == 1) {
+bool CollisionChecker::GenericCollisionChecker(const std::vector<Eigen::Vector2d>& agent_start, const std::vector<Eigen::Vector2d>& agent_end, const amp::Environment2D& env) {
+    if (agent_start.size() == 1 && agent_end.size() == 1) {
         // Point agent
-        return PointCollisionChecker(agent[0], env);
-    } else if (agent.size() == 2) {
+        if (PointCollisionChecker(agent_start[0], env) || PointCollisionChecker(agent_end[0], env)) {
+            return true; // Collision detected
+        } else {
+            if (agent_start[0] == agent_end[0]) {
+                return false; // No movement, no collision
+            }
+            // Check path collision
+            if (LineCollisionChecker(agent_start[0], agent_end[0], env)) {
+                return true; // Collision detected
+            } else {
+                return false; // No collisions
+            }
+        }
+    } else if (agent_start.size() == 2 && agent_end.size() == 2) {
         // Error, not a real polygon
         throw std::invalid_argument("Agent with 2 vertices is not a valid polygon.");
     } else {
         // Polygon agent
         for (const auto& obstacle : env.obstacles) {
             const auto& vertices = obstacle.verticesCCW();
-            if (convexPolygonsIntersect(agent, vertices)) {
+            if (convexPolygonsIntersect(agent_start, vertices) || convexPolygonsIntersect(agent_end, vertices)) {
                 return true; // Collision detected
             }
         }
+        // Check if path between vertices collides
+        if (agent_start == agent_end) {
+            return false; // No movement, no collision
+        }
+        for (size_t i = 0; i < agent_start.size(); ++i) {
+            Eigen::Vector2d start_vertex = agent_start[i];
+            Eigen::Vector2d end_vertex = agent_end[i];
+            if (LineCollisionChecker(start_vertex, end_vertex, env)) {
+                return true; // Collision detected
+            }
+        }
+        
         return false; // No collisions
     }
 }

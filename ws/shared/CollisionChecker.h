@@ -15,7 +15,7 @@ class CollisionChecker {
         bool circlePolygonCollision(const Eigen::Vector2d& point, 
                            double radius, 
                            const std::vector<Eigen::Vector2d>& vertices);
-        bool GenericCollisionChecker(const std::vector<Eigen::Vector2d>& agent, const amp::Environment2D& env);
+        bool GenericCollisionChecker(const std::vector<Eigen::Vector2d>& agent_start, const std::vector<Eigen::Vector2d>& agent_end, const amp::Environment2D& env);
 
     private:
         bool convexPolygonsIntersect(const std::vector<Eigen::Vector2d>& polyA, const std::vector<Eigen::Vector2d>& polyB);
